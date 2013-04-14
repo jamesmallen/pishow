@@ -45,13 +45,6 @@ class OMXPlayer:
                                      preexec_fn=os.setsid)
         
         
-        #self.proc = subprocess.Popen([], stdin=open(self.fifo))
-        
-#        self.proc = subprocess.Popen(['omxplayer', ' '.join(self.opts), track],
- #                                    stdin=subprocess.PIPE)
-        
-        
-        
         logging.debug("omx child pid: {0}".format(self.proc.pid))
         
         # wait until child has started before sending commands

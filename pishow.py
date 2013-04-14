@@ -15,6 +15,7 @@ import re
 import copy
 import uuid
 import fcntl
+import threading
 
 from omx import OMXPlayer
 
@@ -22,7 +23,7 @@ from omx import OMXPlayer
 logging.basicConfig(level=logging.DEBUG)
 
 
-media_path = '/media/UNTITLED'
+media_path = '/media/usb'
 
 # Files should be named in the following format:
 # Content_AAA_BBB.jpg
@@ -37,8 +38,6 @@ media_path = '/media/UNTITLED'
 
     
         
-        
-    
 
 
 class SSPic:
@@ -63,7 +62,9 @@ class SSPic:
         screen.fill((0, 0, 0))
         screen.blit(self.img, (0,0))
         pygame.display.update()
-
+        
+    def done(self, screen):
+        pass
 
 
     def scale_img(self, img, letterbox = True):
@@ -106,38 +107,48 @@ class SSPic:
         
         return target
 
-
-
+        
+        
 class SSVid:
     
     def __init__(self, path):
         self.path = path
         self.cached = False
+        self.path = path
+        self.player = None
+        self.duration = -1
+    
+    def __del__(self):
+        del self.player
 
     def cache(self):
-        "Caches the video"
-        self.img = self.scale_img(pygame.image.load(self.path),
-                                  self.letterbox)
+        "Preloads the video"
+        self.player = OMXPlayer(self.path)
         self.cached = True
 
     def show(self, screen):
         "Shows the image"
         if (not self.cached):
             self.cache()
-
-        screen.fill((0, 0, 0))
-        screen.blit(self.img, (0,0))
-        pygame.display.update()
-
-
+        
+        self.player.play()
+        
+    def done(self, screen):
+        self.player.pause()
+        
+        # clean up after 2/10 s
+    #     t = threading.Timer(.2, self.cleanup, self)
+    # 
+    # def cleanup(self):
+    #     del self.player
 
 
 class Slideshow:
     screen = None
     images = None
     watch_dir = media_path
-    omx_exts = ['mpg', 'm4v', 'mov', 'mkv', 'avi']
-    internal_exts = ['jpg', 'png', 'gif', 'bmp', 'pcx', 'tga', 'tif']
+    vid_exts = ['mp4', 'mpg', 'm4v', 'mov', 'mkv', 'avi']
+    pic_exts = ['jpg', 'png', 'gif', 'bmp', 'pcx', 'tga', 'tif']
     default_duration = 5
     
     def __init__(self, watch_dir = None):
@@ -203,7 +214,7 @@ class Slideshow:
                 logging.debug("Skipping hidden file {0}".format(f))
                 continue
             ext = ext.lower().strip('.')
-            if ext in self.omx_exts or ext in self.internal_exts:
+            if ext in self.vid_exts or ext in self.pic_exts:
                 logging.info("Adding file {0}".format(f))
                 self.images.append(os.path.join(self.watch_dir, f))
             else:
@@ -216,40 +227,60 @@ class Slideshow:
     def __del__(self):
         "Destructor to make sure pygame shuts down, etc."
     
+    def get_ss(self, f):
+        ret = None
+        
+        root, ext = os.path.splitext(f)
+        ext = ext.lower().strip('.')
+        
+        if ext in self.vid_exts:
+            logging.info("Playing {0} using omxplayer".format(f))
+            ret = SSVid(f)
+        elif ext in self.pic_exts:
+            logging.info("Showing {0}".format(f))
+            ret = SSPic(f)
+        
+        duration_match = re.search(r'[0-9]*$', root)
+        if not duration_match:
+            logging.debug("No duration found for {0}. Using default duration of {1}".format(
+                f, self.default_duration))
+            ret.duration = self.default_duration
+        else:
+            ret.duration = int(duration_match.group())
+        
+        return ret
+    
     
     def run(self):
+        idx = 0
+        next = None
+        cur = None
+        old = None
+        
         while True:
-            for f in self.images:
-                root, ext = os.path.splitext(f)
-                ext = ext.lower().strip('.')
-                
-                if ext in self.omx_exts:
-                    logging.info("Playing {0} using omxplayer".format(f))
-                    
-                    self.screen.fill((0, 0, 0))
-                    pygame.display.update()
-                    
-                    subprocess.call(['omxplayer', '-o', 'hdmi', f])
-                    
-                    self.screen.fill((0, 0, 0))
-                    pygame.display.update()
-                
-                elif ext in self.internal_exts:
-                    logging.info("Showing {0}".format(f))
-                    duration_match = re.search(r'[0-9]*$', root)
-                    if not duration_match:
-                        logging.debug("No duration found for {0}. Using default duration of {1}".format(
-                            f, self.default_duration))
-                        duration = self.default_duration
-                    else:
-                        duration = int(duration_match.group())
-                    
-                    next_img = SSPic(f)
-                    next_img.cache()
-                    
-                    next_img.show(self.screen)
-                    
-                    time.sleep(duration)
+            if not cur:
+                cur = self.get_ss(self.images[idx])
+            
+            cur.show(self.screen)
+            nexttime = pygame.time.get_ticks() + (cur.duration * 1000)
+            
+            # catch-up delay of 600 ms to start the next thing before deleting
+            pygame.time.wait(600)
+            del old
+            
+            idx += 1
+            idx %= len(self.images)
+            
+            next = self.get_ss(self.images[idx])
+            next.cache()
+            
+            # wait until we're supposed to flip
+            pygame.time.wait(max(0, nexttime - pygame.time.get_ticks()))
+            
+            cur.done(self.screen)
+            
+            old = cur
+            cur = next
         
 
 
