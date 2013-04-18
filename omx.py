@@ -33,8 +33,9 @@ class OMXPlayer:
     def __start_child(self, track):
         assert self.proc == None
         
-        logging.debug("setting up fifo")
+        logging.debug("setting up fifo {0}".format(self.fifo))
         if os.path.exists(self.fifo):
+            logging.debug("(first removing old fifo)")
             os.remove(self.fifo)
         
         os.mkfifo(self.fifo)
@@ -70,11 +71,22 @@ class OMXPlayer:
     
     def __send_control(self, c):
         #logging.debug("sending control {0}".format(c))
-        #os.system('echo -n "{0}" > "{1}"'.format(c, self.fifo))
         
-        with open(self.fifo, 'w') as f:
-            f.write(c)
-    
+        # attempt to open fifo nonblocking to prevent freezing
+        try:
+            fd = os.open(self.fifo, os.O_WRONLY | os.O_NONBLOCK)
+        except OSError:
+            logging.error("Unable to open fifo {0} for writing".format(self.fifo))
+        else:
+            if fd > 0:
+                # only write if we get a valid fd (<=0 indicates error)
+                try:
+                    os.write(fd, c)
+                except OSError:
+                    logging.error("error writing to fifo {0}".format(self.fifo))
+                finally:
+                    os.close(fd)
+        
         
     def load(self, path, startpaused = False):
         self.__start_child(path)
