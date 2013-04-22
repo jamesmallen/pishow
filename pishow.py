@@ -50,6 +50,7 @@ class SSPic:
 
     def cache(self):
         "Caches the image"
+        
         self.img = self.scale_img(pygame.image.load(self.path),
                                   self.letterbox)
         self.cached = True
@@ -146,7 +147,7 @@ class SSVid:
 class Slideshow:
     screen = None
     images = None
-    watch_dir = media_path
+    watch_dir = None
     vid_exts = ['mp4', 'mpg', 'm4v', 'mov', 'mkv', 'avi']
     pic_exts = ['jpg', 'png', 'gif', 'bmp', 'pcx', 'tga', 'tif']
     default_duration = 5
@@ -234,10 +235,10 @@ class Slideshow:
         ext = ext.lower().strip('.')
         
         if ext in self.vid_exts:
-            logging.info("Playing {0} using omxplayer".format(f))
+            logging.info("{0} will use SSVid".format(f))
             ret = SSVid(f)
         elif ext in self.pic_exts:
-            logging.info("Showing {0}".format(f))
+            logging.info("{0} will use SSPic".format(f))
             ret = SSPic(f)
         
         duration_match = re.search(r'[0-9]*$', root)
@@ -257,14 +258,18 @@ class Slideshow:
         cur = None
         old = None
         
+        assert len(self.images) >= 1
+        
         while True:
             if not cur:
                 cur = self.get_ss(self.images[idx])
             
+            logging.info("Showing {0}".format(self.images[idx]))
             cur.show(self.screen)
+            
             nexttime = pygame.time.get_ticks() + (cur.duration * 1000)
             
-            # catch-up delay of 600 ms to start the next thing before deleting
+            # catch-up delay of 600 ms to start the next thing before moving on
             pygame.time.wait(600)
             del old
             
@@ -272,9 +277,12 @@ class Slideshow:
             idx %= len(self.images)
             
             next = self.get_ss(self.images[idx])
+            logging.info("Caching {0}".format(self.images[idx]))
             next.cache()
             
             # wait until we're supposed to flip
+            logging.info("Sleeping until {0}".format(nexttime))
+            
             pygame.time.wait(max(0, nexttime - pygame.time.get_ticks()))
             
             cur.done(self.screen)
@@ -288,8 +296,8 @@ class Slideshow:
 
 def main():
 
-    # Create an instance of the PyScope class
-    show = Slideshow()
+    # Create an instance of the Slideshow class
+    show = Slideshow(media_path)
 
 
     # Test video

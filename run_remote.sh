@@ -1,4 +1,8 @@
 #!/bin/bash
 
-scp -p * pi@192.168.1.137:~/pishow/
-ssh -t pi@192.168.1.137 sudo /home/pi/pishow/run.sh
+REMOTE_ADDR=192.168.2.2
+
+ssh -t pi@$REMOTE_ADDR sudo /home/pi/pishow/unlock.sh
+scp -p * pi@$REMOTE_ADDR:~/pishow/
+ssh -t pi@$REMOTE_ADDR sudo /home/pi/pishow/relock.sh
+ssh -t pi@$REMOTE_ADDR sudo /home/pi/pishow/run.sh

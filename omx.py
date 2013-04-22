@@ -73,6 +73,8 @@ class OMXPlayer:
         #logging.debug("sending control {0}".format(c))
         
         # attempt to open fifo nonblocking to prevent freezing
+        # TODO: wait a little bit/try again? debug cause of vid not playing
+        
         try:
             fd = os.open(self.fifo, os.O_WRONLY | os.O_NONBLOCK)
         except OSError:
@@ -90,6 +92,9 @@ class OMXPlayer:
         
     def load(self, path, startpaused = False):
         self.__start_child(path)
+        
+        # wait just a tad...
+        time.sleep(0.1)
         
         if startpaused:
             logging.debug('starting paused')
